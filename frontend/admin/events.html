@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Events | AI-Solutions Admin</title>
+  <meta name="robots" content="noindex,nofollow">
+  <link rel="icon" type="image/svg+xml" href="../favicon.svg">
+  <link rel="stylesheet" href="../css/style.css">
+  <style>
+    body { opacity: 1 !important; }
+    .adm-layout { min-height: 100vh; display: flex; }
+    .admin-panel { display: grid; grid-template-columns: 1.15fr .85fr; gap: 1.5rem; }
+    .panel-card { padding: 1.5rem; }
+    .admin-form .fg label { display: block; margin-bottom: .35rem; font-weight: 600; }
+    .admin-form .fg input, .admin-form .fg textarea, .admin-form .fg select { width: 100%; }
+  </style>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+</head>
+<body>
+<div class="adm-layout">
+  <aside class="adm-side">
+    <div class="logo">AI<svg class="logo-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2 3 14h7l-1 8 11-12h-7l1-8Z"/></svg>Solutions</div>
+    <nav class="side-nav">
+      <a href="dashboard.html">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+        Dashboard
+      </a>
+      <a href="articles.html">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        Articles
+      </a>
+      <a href="events.html" class="active">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+        Events
+      </a>
+      <a href="gallery.html">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9M15 21V9"/></svg>
+        Gallery
+      </a>
+      <a href="#" id="signOutBtn" style="margin-top:auto;color:#ef4444">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9"/></svg>
+        Sign Out
+      </a>
+    </nav>
+  </aside>
+
+  <main class="adm-main">
+    <div class="adm-top">
+      <h2>Events</h2>
+      <span style="font-size:.9rem;color:var(--muted)">Create and manage event listings.</span>
+    </div>
+    <div class="adm-body admin-panel">
+      <div class="card panel-card">
+        <h3 id="eventFormTitle">New Event</h3>
+        <form id="eventForm" class="admin-form">
+          <div class="fg">
+            <label for="eventTitle">Event name</label>
+            <input id="eventTitle" name="eventTitle" type="text" required placeholder="Event title">
+          </div>
+          <div class="fr" style="gap:1rem">
+            <div class="fg" style="flex:1">
+              <label for="eventLocation">Location</label>
+              <input id="eventLocation" name="eventLocation" type="text" placeholder="Event location">
+            </div>
+            <div class="fg" style="flex:1">
+              <label for="eventMode">Type</label>
+              <select id="eventMode" name="eventMode">
+                <option value="In Person">In Person</option>
+                <option value="Virtual">Virtual</option>
+                <option value="Hybrid">Hybrid</option>
+              </select>
+            </div>
+          </div>
+          <div class="fr" style="gap:1rem">
+            <div class="fg" style="flex:1">
+              <label for="eventDate">Event date</label>
+              <input id="eventDate" name="eventDate" type="date" required>
+            </div>
+            <div class="fg" style="flex:1;display:grid;grid-template-columns:1fr 1fr;gap:1rem;align-items:end">
+              <div>
+                <label for="eventStartTime">Start time</label>
+                <input id="eventStartTime" name="eventStartTime" type="time">
+              </div>
+              <div>
+                <label for="eventEndTime">End time</label>
+                <input id="eventEndTime" name="eventEndTime" type="time">
+              </div>
+            </div>
+          </div>
+          <div class="fg" style="display:flex;align-items:center;gap:.75rem">
+            <input id="eventFeatured" name="eventFeatured" type="checkbox" style="width:auto;margin-top:0;">
+            <label for="eventFeatured" style="margin:0;">Featured event</label>
+          </div>
+          <div class="fg">
+            <label for="eventDescription">Description</label>
+            <textarea id="eventDescription" name="eventDescription" rows="5" placeholder="Event description"></textarea>
+          </div>
+          <div class="fg">
+            <label for="eventStatus">Status</label>
+            <select id="eventStatus" name="eventStatus">
+              <option value="Scheduled">Scheduled</option>
+              <option value="Published">Published</option>
+              <option value="Completed">Completed</option>
+              <option value="Canceled">Canceled</option>
+            </select>
+          </div>
+          <div id="eventMessage" class="fsuc" style="display:none;margin-top:1rem"></div>
+          <div style="display:flex;align-items:center;gap:.75rem;margin-top:1rem">
+            <button type="submit" class="button button-primary">Save Event</button>
+            <button type="button" id="cancelEventEdit" class="button button-secondary" style="display:none">Cancel</button>
+          </div>
+        </form>
+      </div>
+      <div class="card panel-card">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
+          <h3>Upcoming Events</h3>
+          <span style="color:var(--muted);font-size:.85rem">Live list</span>
+        </div>
+        <div id="eventList">
+          <div class="card"><p style="margin:0;color:var(--muted)">Loading events…</p></div>
+        </div>
+        <div id="eventPagination" style="display:flex;justify-content:flex-end;align-items:center;gap:.5rem;margin-top:1rem;">
+          <button id="eventPrevBtn" class="button button-ghost button-sm" type="button" disabled>Prev</button>
+          <span id="eventPageLabel" style="color:var(--muted);font-size:.9rem">Page 1</span>
+          <button id="eventNextBtn" class="button button-ghost button-sm" type="button" disabled>Next</button>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script src="../js/main.js"></script>
+</body>
+</html>

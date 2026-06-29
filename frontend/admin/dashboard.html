@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Dashboard | AI-Solutions Admin</title>
+  <meta name="robots" content="noindex,nofollow">
+  <link rel="icon" type="image/svg+xml" href="../favicon.svg">
+  <link rel="stylesheet" href="../css/style.css">
+  <style>
+    body { opacity: 1 !important; }
+    .adm-layout { min-height: 100vh; display: flex; }
+  </style>
+
+  <style>
+    /* Modal improvements */
+    .modal { display:none; align-items:center; justify-content:center; }
+    .modal-card { border-radius:8px; box-shadow:0 8px 30px rgba(0,0,0,.25); }
+    .modal-card h3 { margin:0 0 .5rem; }
+    .modal .card { padding:1rem; }
+    .modal .btn { display:block; }
+
+    /* Toasts */
+    #toastContainer { position:fixed; right:1rem; bottom:1rem; z-index:80; display:flex; flex-direction:column; gap:.5rem; }
+    /* Filter highlighted when active */
+    #inquiryFilter.filtered { background:#eff6ff; border-color:#bfdbfe; }
+    .toast { min-width:220px; background:#1f2937;color:#fff;padding:.6rem .8rem;border-radius:6px;box-shadow:0 6px 18px rgba(0,0,0,.2);opacity:0;transform:translateY(8px);transition:all .25s ease; }
+    .toast.show { opacity:1; transform:translateY(0); }
+    .toast.success { background:#16a34a; }
+    .toast.error { background:#dc2626; }
+    .toast.info { background:#0ea5e9; }
+
+    .btn.loading { opacity:.85; position:relative; }
+    .btn.loading::after { content:''; position:absolute; right:10px; top:50%; transform:translateY(-50%); width:14px; height:14px; border-radius:50%; border:2px solid rgba(255,255,255,.25); border-top-color:#fff; animation:spin .8s linear infinite; }
+    @keyframes spin { to { transform:rotate(360deg); } }
+  </style>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+</head>
+<body style="opacity:1">
+<div class="adm-layout">
+  <!-- Sidebar -->
+  <aside class="adm-side">
+    <div class="logo">AI<svg class="logo-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2 3 14h7l-1 8 11-12h-7l1-8Z"/></svg>Solutions</div>
+    <nav class="side-nav">
+      <a href="dashboard.html" class="active">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+        Dashboard
+      </a>
+      <a href="articles.html">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        Articles
+      </a>
+      <a href="events.html">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+        Events
+      </a>
+      <a href="gallery.html">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9M15 21V9"/></svg>
+        Gallery
+      </a>
+      <a href="#" id="signOutBtn" style="margin-top:auto;color:#ef4444">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9"/></svg>
+        Sign Out
+      </a>
+    </nav>
+  </aside>
+
+  <!-- Main content -->
+  <main class="adm-main">
+    <div class="adm-top">
+      <h2>Dashboard Overview</h2>
+      <div style="display:flex;align-items:center;gap:.75rem">
+        <span style="font-size:.82rem;color:var(--muted)">June 28, 2025</span>
+        <div style="width:32px;height:32px;border-radius:50%;background:var(--grad);display:flex;align-items:center;justify-content:center;font-size:.8rem;font-weight:700">AD</div>
+      </div>
+    </div>
+
+    <div class="adm-body">
+      <!-- Stats -->
+      <div class="adm-stats">
+        <div class="card scard">
+          <div class="slbl">Total Inquiries</div>
+          <div class="sval" id="inquiryTotal">—</div>
+          <!-- <div class="schg" id="inquiryChange" style="color:var(--muted)">Loading…</div> -->
+        </div>
+        <div class="card scard">
+          <div class="slbl">Total Articles</div>
+          <div class="sval" id="articleTotal">—</div>
+          <!-- <div class="schg" style="color:var(--muted)">Loading…</div> -->
+        </div>
+        <div class="card scard">
+          <div class="slbl">Total Events</div>
+          <div class="sval" id="eventTotal">—</div>
+          <!-- <div class="schg" style="color:var(--muted)">Loading…</div> -->
+        </div>
+        <div class="card scard">
+          <div class="slbl">Upcoming Events</div>
+          <div class="sval" id="upcomingEvents">—</div>
+          <!-- <div class="schg" style="color:var(--muted)">Loading…</div> -->
+        </div>
+      </div>
+
+      <!-- Recent Inquiries Table -->
+      <div class="card tbl-card">
+        <div class="tbl-hd">
+          <h3>Recent Inquiries</h3>
+          <div style="display:flex;align-items:center;gap:.5rem">
+            <button id="exportCsvBtn" class="btn btn-ghost btn-sm">Export CSV</button>
+            <label style="font-size:.86rem;color:var(--muted);margin-left:.5rem">Filter:</label>
+            <select id="inquiryFilter" style="padding:.4rem;border-radius:6px;border:1px solid #e5e7eb;background:#fff">
+              <option value="All">All Statuses</option>
+              <option value="New">New</option>
+              <option value="Pending">Pending</option>
+              <option value="Responded">Responded</option>
+              <option value="Closed">Closed</option>
+            </select>
+          </div>
+        </div>
+        <div style="overflow-x:auto">
+          <table class="dtbl">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Name</th>
+                <th>Company</th>
+                <th>Interest</th>
+                <th>Country</th>
+                <th>Date</th>
+                <th>Status</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody id="inquiryTableBody">
+              <tr>
+                <td colspan="8" style="color:var(--muted);text-align:center">Loading inquiries…</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div style="padding:.75rem 0 0;display:flex;justify-content:space-between;align-items:center;font-size:.82rem;color:var(--muted)">
+          <span id="inquiryCount">Loading inquiry summary…</span>
+          <div style="display:flex;gap:.4rem">
+            <button class="btn btn-ghost btn-sm"><svg class="inline-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M11 6l-6 6 6 6"/></svg> Prev</button>
+            <button class="btn btn-ghost btn-sm">Next <svg class="inline-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
+          </div>
+        </div>
+      </div>
+      <div class="card tbl-card" style="margin-top:1.5rem">
+        <div class="tbl-hd">
+          <h3>Registered Admins</h3>
+          <!-- <span style="font-size:.86rem;color:var(--muted)">Loaded from Firestore admins collection</span> -->
+        </div>
+        <div style="overflow-x:auto">
+          <table class="dtbl">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Name</th>
+                <th>Email</th>
+                <th>Last login</th>
+                <th>Status</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody id="userTableBody">
+              <tr>
+                <td colspan="6" style="color:var(--muted);text-align:center">Loading users…</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div style="padding:.75rem 0 0;display:flex;justify-content:flex-start;align-items:center;font-size:.82rem;color:var(--muted)">
+          <span id="userCount">Loading user summary…</span>
+        </div>
+      </div>
+      <div class="card tbl-card" style="margin-top:1.5rem">
+        <div class="tbl-hd">
+          <h3>Change Password</h3>
+        </div>
+        <form id="changePasswordForm" style="display:grid;gap:1rem;padding:1rem 0">
+          <div>
+            <label for="currentPassword" style="display:block;margin-bottom:.35rem;color:var(--muted)">Current password</label>
+            <input id="currentPassword" type="password" placeholder="Enter current password" style="width:100%;padding:.85rem 1rem;border:1px solid var(--border);border-radius:12px;background:var(--card);color:var(--text);" required />
+          </div>
+          <div>
+            <label for="newPassword" style="display:block;margin-bottom:.35rem;color:var(--muted)">New password</label>
+            <input id="newPassword" type="password" placeholder="Enter new password" style="width:100%;padding:.85rem 1rem;border:1px solid var(--border);border-radius:12px;background:var(--card);color:var(--text);" required />
+          </div>
+          <div>
+            <label for="confirmPassword" style="display:block;margin-bottom:.35rem;color:var(--muted)">Confirm new password</label>
+            <input id="confirmPassword" type="password" placeholder="Confirm new password" style="width:100%;padding:.85rem 1rem;border:1px solid var(--border);border-radius:12px;background:var(--card);color:var(--text);" required />
+          </div>
+          <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center;padding:.95rem 1rem">Change password</button>
+          <div id="passwordChangeMessage" style="display:none;font-size:.92rem;line-height:1.4;color:#16a34a"></div>
+        </form>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script src="../js/main.js"></script>
+<!-- Inquiry modal -->
+<div id="inquiryModal" class="modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);align-items:center;justify-content:center;z-index:60">
+  <div class="modal-card card" style="width:720px;max-width:96%;padding:1rem;position:relative">
+    <button id="inquiryModalClose" style="position:absolute;right:.6rem;top:.6rem;border:none;background:none;font-size:1.2rem">✕</button>
+    <h3 id="modalTitle">Inquiry</h3>
+    <div style="display:flex;gap:1rem;margin-top:.5rem">
+      <div style="flex:1;padding-right:1rem">
+        <p><strong>Name:</strong> <span id="modalName">—</span></p>
+        <p><strong>Email:</strong> <span id="modalEmail">—</span></p>
+        <p><strong>Company:</strong> <span id="modalCompany">—</span></p>
+        <p><strong>Interest:</strong> <span id="modalInterest">—</span></p>
+        <p><strong>Country:</strong> <span id="modalCountry">—</span></p>
+        <p><strong>Date:</strong> <span id="modalDate">—</span></p>
+      </div>
+      <div style="width:320px">
+        <label style="display:block;margin-bottom:.35rem"><strong>Status</strong></label>
+        <select id="modalStatus" style="width:100%;padding:.5rem;margin-bottom:.75rem">
+          <option value="New">New</option>
+          <option value="Pending">Pending</option>
+          <option value="Responded">Responded</option>
+          <option value="Closed">Closed</option>
+        </select>
+        <button id="saveStatusBtn" class="btn btn-primary" style="width:100%;margin-bottom:.5rem">Save status</button>
+
+        <label style="display:block;margin:1rem 0 .35rem"><strong>Reply</strong></label>
+        <input id="replySubject" placeholder="Subject" style="width:100%;padding:.5rem;margin-bottom:.5rem" />
+        <textarea id="replyMessage" placeholder="Message" style="width:100%;height:120px;padding:.5rem;margin-bottom:.5rem"></textarea>
+        <button id="sendReplyBtn" class="btn btn-primary" style="width:100%">Send reply</button>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>
