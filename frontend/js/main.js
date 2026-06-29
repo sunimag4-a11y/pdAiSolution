@@ -58,6 +58,16 @@ const FIREBASE_CONFIG = {
   measurementId: 'G-9MYRF6NNNV',
 };
 
+const PRODUCTION_API_BASE = 'https://pdaisolution.onrender.com';
+
+function getApiBase() {
+  if (window.location.protocol === 'file:') {
+    return 'http://localhost:4000';
+  }
+  return PRODUCTION_API_BASE;
+}
+
+
 const STATIC_ARTICLE_FALLBACKS = {
   'enterprise-ai-adoption-2025': {
     title: "The State of Enterprise AI Adoption in 2025: What's Working and What Isn't",
@@ -92,7 +102,7 @@ function setAdminAuthenticated(value) {
 
 function requireAdminAuth() {
   if (!isAdminAuthenticated()) {
-    window.location.replace('frontend/admin/login.html');
+    window.location.replace('login.html');
   }
 }
 
@@ -325,11 +335,7 @@ function initChatbot() {
     input.focus();
     setBotTyping(true);
 
-    const apiBase = window.location.protocol === 'file:'
-      ? 'http://localhost:4000'
-      : ((window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
-        ? 'http://localhost:4000'
-        : '');
+    const apiBase = getApiBase();
 
     try {
       const response = await fetch(`${apiBase}/api/ai/chat`, {
@@ -383,11 +389,7 @@ function initGallery() {
   const lbNext = document.getElementById('lbNext');
   if (!grid || !lb || !lbImg) return;
 
-  const apiBase = window.location.protocol === 'file:'
-    ? 'http://localhost:4000'
-    : ((window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
-      ? 'http://localhost:4000'
-      : '');
+  const apiBase = getApiBase();
   const galleryUrl = `${apiBase}/api/gallery`;
 
   let current = 0;
@@ -511,11 +513,7 @@ function initEvents() {
   const pastContainer = document.getElementById('pastEvents');
   if (!upcomingContainer || !pastContainer) return;
 
-  const apiBase = window.location.protocol === 'file:'
-    ? 'http://localhost:4000'
-    : ((window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
-      ? 'http://localhost:4000'
-      : '');
+  const apiBase = getApiBase();
   const eventsUrl = `${apiBase}/api/events`;
 
   const renderEventCard = (event) => {
@@ -599,11 +597,7 @@ function initArticles() {
   const grid = document.getElementById('articleGrid');
   if (!grid) return;
 
-  const apiBase = window.location.protocol === 'file:'
-    ? 'http://localhost:4000'
-    : ((window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
-      ? 'http://localhost:4000'
-      : '');
+  const apiBase = getApiBase();
   const articlesUrl = `${apiBase}/api/articles`;
 
   const renderArticleCards = (articles) => {
@@ -654,11 +648,7 @@ function initArticleDetail() {
   const detail = document.getElementById('articleDetail');
   if (!detail) return;
 
-  const apiBase = window.location.protocol === 'file:'
-    ? 'http://localhost:4000'
-    : ((window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
-      ? 'http://localhost:4000'
-      : '');
+  const apiBase = getApiBase();
 
   const params = new URLSearchParams(window.location.search);
   const articleId = params.get('id');
@@ -751,6 +741,14 @@ function initContactForm() {
     success.style.display = 'block';
   };
 
+  const submitButton = form.querySelector('button[type="submit"]');
+  const originalButtonText = submitButton ? submitButton.textContent.trim() : 'Send message';
+  const setLoading = (loading) => {
+    if (!submitButton) return;
+    submitButton.disabled = loading;
+    submitButton.textContent = loading ? 'Sending…' : originalButtonText;
+  };
+
   form.querySelectorAll('input, select, textarea').forEach(f => {
     f.addEventListener('blur', () => validate(f));
     f.addEventListener('input', () => validate(f));
@@ -773,9 +771,10 @@ function initContactForm() {
       jobDetails: form.jobDetails.value.trim(),
     };
 
-    const apiBase = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
-      ? 'http://localhost:4000'
-      : '';
+    const apiBase = getApiBase();
+    setStatus('Sending your message...', true);
+    setLoading(true);
+    showToast('Sending your message…', 'info');
 
     try {
       const response = await fetch(`${apiBase}/api/contact`, {
@@ -788,11 +787,15 @@ function initContactForm() {
       if (!response.ok) throw new Error(result.message || 'Submission failed.');
 
       setStatus("Message received! Thank you — we'll follow up within one business day.");
+      showToast('Message sent successfully.', 'success');
       form.reset();
       form.style.display = 'none';
     } catch (err) {
       console.error('Contact form submit failed', err);
       setStatus(err.message || 'Unable to send your message right now. Please try again later.', false);
+      showToast(err.message || 'Unable to send your message right now.', 'error');
+    } finally {
+      setLoading(false);
     }
   });
 }
@@ -809,9 +812,7 @@ function initAdminLogin() {
   const loginStatus = document.getElementById('loginStatus');
   if (!googleButton || !passwordForm || !emailInput || !passwordInput) return;
 
-  const apiBase = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
-    ? 'http://localhost:4000'
-    : '';
+  const apiBase = getApiBase();
 
   const showLoginError = (message) => {
     if (!errorBox) return;
@@ -869,9 +870,9 @@ function initAdminLogin() {
         passwordForm.style.display = 'flex';
         emailInput.value = user.email;
         emailInput.focus();
-        showLoginStatus('Temporary password sent to your email. Use the form below to log in.');
+        showLoginStatus('Temporary password sent to your email. Your account is inactive until an admin activates it, so please contact the administrator for access.');
       } else {
-        showLoginStatus(data.message || 'Please use the password form below to log in.');
+        showLoginStatus(data.message || 'Please use the password form below to log in. Contact your administrator if you need access.');
         passwordForm.style.display = 'flex';
         emailInput.value = user.email;
         emailInput.focus();
@@ -908,16 +909,27 @@ function initAdminLogin() {
       const adminDoc = await firebase.firestore().collection('admins').doc(currentUser.uid).get();
       if (adminDoc.exists) {
         const adminData = adminDoc.data();
-        if (adminData && adminData.approveStatus === false) {
+        if (adminData && adminData.status && adminData.status.toString().toLowerCase() === 'inactive') {
           await firebase.auth().signOut();
-          showLoginError('Your admin account is not approved yet.');
+          showLoginError('Your admin account is inactive. Contact your administrator to get access.');
           clearLoginStatus();
           return;
         }
+        if (adminData && adminData.approveStatus === false) {
+          await firebase.auth().signOut();
+          showLoginError('Your admin account is not approved yet. Contact your administrator to get access.');
+          clearLoginStatus();
+          return;
+        }
+      } else {
+        await firebase.auth().signOut();
+        showLoginError('Admin account not found. Contact your administrator for access.');
+        clearLoginStatus();
+        return;
       }
 
       setAdminAuthenticated(true);
-      window.location.replace('frontend/admin/dashboard.html');
+      window.location.replace('dashboard.html');
     } catch (err) {
       showLoginError(err.message || 'Unable to sign in with password.');
       clearLoginStatus();
@@ -1070,8 +1082,8 @@ async function loadDashboardTotals() {
 
   try {
     const [articlesRes, eventsRes] = await Promise.all([
-      fetch('http://localhost:4000/api/articles', { cache: 'no-store', headers: { 'Cache-Control': 'no-cache' } }),
-      fetch('http://localhost:4000/api/events', { cache: 'no-store', headers: { 'Cache-Control': 'no-cache' } }),
+      fetch(`${getApiBase()}/api/articles`, { cache: 'no-store', headers: { 'Cache-Control': 'no-cache' } }),
+      fetch(`${getApiBase()}/api/events`, { cache: 'no-store', headers: { 'Cache-Control': 'no-cache' } }),
     ]);
 
     const articles = articlesRes.ok ? await articlesRes.json() : [];
@@ -1164,7 +1176,7 @@ async function loadInquiries() {
   // Prefer backend API if available, fall back to Firestore.
   tableBody.innerHTML = '<tr><td colspan="8" style="color:var(--muted);text-align:center">Loading inquiries…</td></tr>';
   try {
-    const res = await fetch('http://localhost:4000/api/inquiries', { cache: 'no-store', headers: { 'Cache-Control': 'no-cache' } });
+    const res = await fetch(`${getApiBase()}/api/inquiries`, { cache: 'no-store', headers: { 'Cache-Control': 'no-cache' } });
     if (res.ok) {
       const data = await res.json();
       inquiriesCache = Array.isArray(data) ? data : [];
@@ -1228,7 +1240,7 @@ function initDashboard() {
   firebase.auth().onAuthStateChanged((user) => {
     if (!user) {
       setAdminAuthenticated(false);
-      window.location.replace('/admin/login.html');
+      window.location.replace('login.html');
     }
   });
 
@@ -1278,9 +1290,7 @@ function initChangePassword() {
     }
 
     try {
-      const response = await fetch((window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
-        ? 'http://localhost:4000/api/admin/change-password'
-        : '/api/admin/change-password', {
+      const response = await fetch(`${getApiBase()}/api/admin/change-password`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -1331,9 +1341,7 @@ function initAdminChat() {
     status.style.color = isError ? '#dc2626' : 'var(--muted)';
   };
 
-  const apiBase = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
-    ? 'http://localhost:4000'
-    : '';
+  const apiBase = getApiBase();
 
   form.addEventListener('submit', async (event) => {
     event.preventDefault();
@@ -1420,7 +1428,7 @@ document.addEventListener('DOMContentLoaded', () => {
     saveBtn.disabled = true;
     saveBtn.classList.add('loading');
     try {
-      const res = await fetch(`http://localhost:4000/api/inquiries/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status }) });
+      const res = await fetch(`${getApiBase()}/api/inquiries/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status }) });
       if (!res.ok) throw new Error('Failed');
       await loadInquiries();
       closeInquiryModal();
@@ -1438,7 +1446,7 @@ document.addEventListener('DOMContentLoaded', () => {
     sendBtn.disabled = true;
     sendBtn.classList.add('loading');
     try {
-      const res = await fetch(`http://localhost:4000/api/inquiries/${id}/reply`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ subject, message }) });
+      const res = await fetch(`${getApiBase()}/api/inquiries/${id}/reply`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ subject, message }) });
       if (!res.ok) throw new Error('Failed to send');
       showToast('Reply sent', 'success');
       await loadInquiries();
@@ -1521,7 +1529,7 @@ async function uploadArticleImage(file) {
     reader.onload = async () => {
       const payload = { image: reader.result, name: file.name };
       try {
-        const res = await fetch('http://localhost:4000/api/upload-image', {
+        const res = await fetch(`${getApiBase()}/api/upload-image`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
@@ -1700,7 +1708,7 @@ function initAdminArticles() {
     list.innerHTML = '<div class="card"><p style="margin:0;color:var(--muted)">Loading articles…</p></div>';
     if (pagination) pagination.style.display = 'none';
     try {
-      const res = await fetch('http://localhost:4000/api/articles');
+      const res = await fetch(`${getApiBase()}/api/articles`);
       if (!res.ok) throw new Error('Unable to load articles');
       const data = await res.json();
       cachedArticles = Array.isArray(data) ? data : [];
@@ -1762,7 +1770,7 @@ function initAdminArticles() {
         }
       }
       const payload = { title, summary, body, status, publishedAt, images };
-      const endpoint = editingArticleId ? `http://localhost:4000/api/articles/${editingArticleId}` : 'http://localhost:4000/api/articles';
+      const endpoint = editingArticleId ? `${getApiBase()}/api/articles/${editingArticleId}` : `${getApiBase()}/api/articles`;
       const method = editingArticleId ? 'PATCH' : 'POST';
       try {
         const res = await fetch(endpoint, {
@@ -1906,7 +1914,7 @@ function initAdminEvents() {
     list.innerHTML = '<div class="card"><p style="margin:0;color:var(--muted)">Loading events…</p></div>';
     if (pagination) pagination.style.display = 'none';
     try {
-      const res = await fetch('http://localhost:4000/api/events');
+      const res = await fetch(`${getApiBase()}/api/events`);
       if (!res.ok) throw new Error('Unable to load events');
       const data = await res.json();
       cachedEvents = Array.isArray(data) ? data : [];
@@ -1962,7 +1970,7 @@ function initAdminEvents() {
         return;
       }
       try {
-        const endpoint = editingEventId ? `http://localhost:4000/api/events/${editingEventId}` : 'http://localhost:4000/api/events';
+        const endpoint = editingEventId ? `${getApiBase()}/api/events/${editingEventId}` : `${getApiBase()}/api/events`;
         const method = editingEventId ? 'PATCH' : 'POST';
         const res = await fetch(endpoint, {
           method,
@@ -2130,7 +2138,7 @@ function initAdminGallery() {
     list.innerHTML = '<div class="card"><p style="margin:0;color:var(--muted)">Loading gallery items…</p></div>';
     if (pagination) pagination.style.display = 'none';
     try {
-      const res = await fetch('http://localhost:4000/api/gallery');
+      const res = await fetch(`${getApiBase()}/api/gallery`);
       if (!res.ok) throw new Error('Unable to load gallery items');
       const data = await res.json();
       cachedGalleryItems = Array.isArray(data) ? data : [];
@@ -2204,7 +2212,7 @@ function initAdminGallery() {
         }
       }
       const payload = { title, category, description, status, image };
-      const endpoint = editingGalleryId ? `http://localhost:4000/api/gallery/${editingGalleryId}` : 'http://localhost:4000/api/gallery';
+      const endpoint = editingGalleryId ? `${getApiBase()}/api/gallery/${editingGalleryId}` : `${getApiBase()}/api/gallery`;
       const method = editingGalleryId ? 'PATCH' : 'POST';
       try {
         const res = await fetch(endpoint, {

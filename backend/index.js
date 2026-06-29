@@ -64,14 +64,29 @@ const validateInquiry = (body) => {
 const FIREBASE_WEB_API_KEY = process.env.FIREBASE_WEB_API_KEY || process.env.FIREBASE_API_KEY;
 
 const createTransporter = () => {
-  if (!process.env.GMAIL_USER || !process.env.GMAIL_PASS) {
-    throw new Error('Missing GMAIL_USER or GMAIL_PASS in environment variables.');
+  const smtpUser = process.env.SMTP_USER || process.env.GMAIL_USER;
+  const smtpPass = process.env.SMTP_PASS || process.env.GMAIL_PASS;
+  if (!smtpUser || !smtpPass) {
+    throw new Error('Missing SMTP_USER/SMTP_PASS or GMAIL_USER/GMAIL_PASS in environment variables.');
   }
+
+  const smtpHost = process.env.SMTP_HOST || 'smtp.gmail.com';
+  const smtpPort = Number(process.env.SMTP_PORT || (process.env.SMTP_SECURE === 'true' ? 465 : 587));
+  const smtpSecure = process.env.SMTP_SECURE === 'true' || smtpPort === 465;
+
   return nodemailer.createTransport({
-    service: 'gmail',
+    host: smtpHost,
+    port: smtpPort,
+    secure: smtpSecure,
     auth: {
-      user: process.env.GMAIL_USER,
-      pass: process.env.GMAIL_PASS,
+      user: smtpUser,
+      pass: smtpPass,
+    },
+    greetingTimeout: 10000,
+    connectionTimeout: 10000,
+    socketTimeout: 10000,
+    tls: {
+      rejectUnauthorized: process.env.SMTP_REJECT_UNAUTHORIZED !== 'false',
     },
   });
 };
@@ -85,28 +100,36 @@ const generateTempPassword = (length = 10) => {
   return password;
 };
 
-const sendAdminPasswordEmail = async ({ email, password, name }) => {
+const getDefaultSender = () => {
+  const fromName = process.env.FROM_NAME || 'AI Solutions';
+  const fromEmail = process.env.FROM_EMAIL || process.env.SMTP_USER || process.env.GMAIL_USER;
+  return `${fromName} <${fromEmail}>`;
+};
+
+const sendEmail = async ({ to, subject, text, html }) => {
+  const from = getDefaultSender();
   const transporter = createTransporter();
-  const mailOptions = {
-    from: `"${process.env.FROM_NAME || 'AI Solutions'}" <${process.env.FROM_EMAIL || process.env.GMAIL_USER}>`,
+  return transporter.sendMail({ from, to, subject, text, html });
+};
+
+const sendAdminPasswordEmail = async ({ email, password, name }) => {
+  const loginUrl = process.env.ADMIN_LOGIN_URL || 'http://localhost:3000/admin/login.html';
+  return sendEmail({
     to: email,
     subject: 'Your AI Solutions temporary admin password',
-    text: `Hi ${name || 'Admin'},\n\nA temporary password has been created for your AI Solutions admin login. Use the password below to sign in, then update your password after login if needed.\n\nTemporary password: ${password}\n\nLogin page: ${process.env.ADMIN_LOGIN_URL || 'http://localhost:3000/admin/login.html'}\n\nIf you did not request this password, please contact support.\n`,
+    text: `Hi ${name || 'Admin'},\n\nA temporary password has been created for your AI Solutions admin login. Use the password below to sign in, then update your password after login if needed.\n\nTemporary password: ${password}\n\nLogin page: ${loginUrl}\n\nIf you did not request this password, please contact support.\n`,
     html: `
       <p>Hi ${name || 'Admin'},</p>
       <p>A temporary password has been created for your <strong>AI Solutions</strong> admin login.</p>
       <p><strong>Temporary password:</strong> <code>${password}</code></p>
-      <p>Sign in here: <a href="${process.env.ADMIN_LOGIN_URL || 'http://localhost:3000/admin/login.html'}">Admin login</a></p>
+      <p>Sign in here: <a href="${loginUrl}">Admin login</a></p>
       <p>If you did not request this password, please contact support.</p>
     `,
-  };
-  return transporter.sendMail(mailOptions);
+  });
 };
 
 const sendConfirmationEmail = async (payload) => {
-  const transporter = createTransporter();
-  const mailOptions = {
-    from: `"${process.env.FROM_NAME || 'AI Solutions'}" <${process.env.FROM_EMAIL || process.env.GMAIL_USER}>`,
+  return sendEmail({
     to: payload.email,
     subject: 'Thank you for contacting AI Solutions',
     text: `Hi ${payload.fullName},\n\nThank you for reaching out to AI Solutions. We have received your message and will respond within one business day.\n\nSummary:\n- Company: ${payload.company}\n- Primary interest: ${payload.interest || 'Not specified'}\n- Message: ${payload.jobDetails}\n\nBest regards,\nAI Solutions Team`,
@@ -121,8 +144,7 @@ const sendConfirmationEmail = async (payload) => {
       </ul>
       <p>Best regards,<br />AI Solutions Team</p>
     `,
-  };
-  return transporter.sendMail(mailOptions);
+  });
 };
 
 app.post('/api/upload-image', async (req, res) => {
@@ -248,6 +270,7 @@ app.post('/api/admin/send-temp-password', async (req, res) => {
       email: normalizedEmail,
       name: name ? String(name).trim() : '',
       approveStatus: false,
+      status: 'Inactive',
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     }, { merge: true });
 
