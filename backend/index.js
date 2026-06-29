@@ -66,9 +66,15 @@ const FIREBASE_WEB_API_KEY = process.env.FIREBASE_WEB_API_KEY || process.env.FIR
 const createTransporter = () => {
   const smtpUser = String(process.env.SMTP_USER || process.env.GMAIL_USER || '').trim();
   const smtpPass = String(process.env.SMTP_PASS || process.env.GMAIL_PASS || '').trim().replace(/\s+/g, '');
-  const smtpHost = process.env.SMTP_HOST || 'smtp.gmail.com';
-  const smtpPort = Number(process.env.SMTP_PORT || 587);
-  const smtpSecure = process.env.SMTP_SECURE === 'true' || smtpPort === 465;
+  const smtpHost = String(process.env.SMTP_HOST || 'smtp.gmail.com').trim();
+  const isGmailHost = smtpHost.toLowerCase().includes('gmail.com');
+  let smtpPort = Number(process.env.SMTP_PORT || 587);
+  let smtpSecure = process.env.SMTP_SECURE === 'true' || process.env.SMTP_SECURE === '1' || smtpPort === 465;
+
+  if (isGmailHost && !process.env.SMTP_PORT && !process.env.SMTP_SECURE) {
+    smtpPort = 465;
+    smtpSecure = true;
+  }
 
   if (!smtpUser || !smtpPass) {
     console.error('❌ Missing SMTP credentials:', {
@@ -102,7 +108,7 @@ const createTransporter = () => {
     logger: process.env.NODE_ENV !== 'production',
   };
 
-  if (!process.env.SMTP_HOST && !process.env.SMTP_PORT) {
+  if (isGmailHost && !process.env.SMTP_HOST && !process.env.SMTP_PORT) {
     transporterConfig.service = 'gmail';
   } else {
     transporterConfig.host = smtpHost;
