@@ -389,16 +389,26 @@ app.post('/api/contact', async (req, res) => {
     createdAt: new Date().toISOString(),
   };
 
+  const db = initFirebaseAdmin().firestore();
   try {
-    const db = initFirebaseAdmin().firestore();
     await db.collection('inquiries').add(firestoreRecord);
+  } catch (err) {
+    console.error('Contact save error:', err);
+    const response = { message: 'Unable to save inquiry.' };
+    if (process.env.NODE_ENV !== 'production') response.error = err.message;
+    return res.status(500).json(response);
+  }
+
+  try {
     await sendConfirmationEmail(emailRecord);
     return res.status(201).json({ message: 'Inquiry submitted successfully.' });
   } catch (err) {
-    console.error('Contact API error:', err);
-    const response = { message: 'Unable to save inquiry or send email.' };
+    console.error('Contact email error:', err);
+    const response = {
+      message: 'Inquiry submitted successfully, but confirmation email could not be sent. We will follow up shortly.',
+    };
     if (process.env.NODE_ENV !== 'production') response.error = err.message;
-    return res.status(500).json(response);
+    return res.status(201).json(response);
   }
 });
 
