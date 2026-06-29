@@ -68,26 +68,44 @@ const createTransporter = () => {
   const smtpPass = process.env.SMTP_PASS || process.env.GMAIL_PASS;
   
   if (!smtpUser || !smtpPass) {
-    throw new Error('Missing SMTP credentials');
+    console.error('❌ Missing SMTP credentials:', {
+      hasSMTPUser: !!smtpUser,
+      hasSMTPPass: !!smtpPass
+    });
+    throw new Error('Missing SMTP_USER/SMTP_PASS or GMAIL_USER/GMAIL_PASS in environment variables.');
   }
 
-  return nodemailer.createTransport({
-    host: 'smtp.gmail.com',
-    port: 587,
-    secure: false, // Use STARTTLS
+  // Log connection attempt (hide password)
+  console.log('📧 Creating Gmail transporter with:', {
+    user: smtpUser.substring(0, 5) + '...' + smtpUser.substring(smtpUser.indexOf('@')),
+    host: process.env.SMTP_HOST || 'smtp.gmail.com',
+    port: Number(process.env.SMTP_PORT || 587),
+    secure: process.env.SMTP_SECURE === 'true' || Number(process.env.SMTP_PORT || 587) === 465,
+    hasPassword: !!smtpPass
+  });
+
+  const transporter = nodemailer.createTransport({
+    host: process.env.SMTP_HOST || 'smtp.gmail.com',
+    port: Number(process.env.SMTP_PORT || 587),
+    secure: process.env.SMTP_SECURE === 'true' || Number(process.env.SMTP_PORT || 587) === 465,
     auth: {
       user: smtpUser,
       pass: smtpPass,
     },
-    // These timeouts are critical for Render
-    connectionTimeout: 30000,
-    greetingTimeout: 30000,
-    socketTimeout: 30000,
-    // For debugging
+    // Increase timeouts significantly
+    connectionTimeout: 60000,  // 60 seconds
+    greetingTimeout: 60000,    // 60 seconds
+    socketTimeout: 60000,      // 60 seconds
+    tls: {
+      rejectUnauthorized: false, // Sometimes needed on Render
+    },
     debug: process.env.NODE_ENV !== 'production',
     logger: process.env.NODE_ENV !== 'production',
   });
+
+  return transporter;
 };
+
 
 const generateTempPassword = (length = 10) => {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%&*';
@@ -105,9 +123,68 @@ const getDefaultSender = () => {
 };
 
 const sendEmail = async ({ to, subject, text, html }) => {
-  const from = getDefaultSender();
-  const transporter = createTransporter();
-  return transporter.sendMail({ from, to, subject, text, html });
+  console.log('📧 SEND EMAIL START:', { to, subject: subject.substring(0, 30) + '...' });
+  
+  const startTime = Date.now();
+  
+  try {
+    const from = getDefaultSender();
+    console.log('📧 From:', from);
+    
+    const transporter = createTransporter();
+    console.log('📧 Transporter created, verifying connection...');
+    
+    // Verify connection first (this will timeout if blocked)
+    try {
+      await transporter.verify();
+      console.log('✅ SMTP connection verified successfully');
+    } catch (verifyError) {
+      console.error('❌ SMTP verification failed:', {
+        message: verifyError.message,
+        code: verifyError.code,
+        command: verifyError.command
+      });
+      throw verifyError;
+    }
+    
+    console.log('📧 Sending mail...');
+    const result = await transporter.sendMail({
+      from,
+      to,
+      subject,
+      text,
+      html,
+    });
+    
+    const duration = Date.now() - startTime;
+    console.log('✅ Email sent successfully in', duration, 'ms');
+    console.log('📧 Result:', {
+      messageId: result.messageId,
+      accepted: result.accepted,
+      rejected: result.rejected,
+      response: result.response?.substring(0, 100)
+    });
+    
+    return result;
+  } catch (error) {
+    const duration = Date.now() - startTime;
+    console.error('❌ EMAIL SENDING FAILED after', duration, 'ms');
+    console.error('❌ Full error details:', {
+      name: error.name,
+      message: error.message,
+      code: error.code,
+      command: error.command,
+      response: error.response,
+      responseCode: error.responseCode,
+      stack: error.stack,
+      recipient: to,
+      smtpUser: process.env.SMTP_USER || 'NOT SET',
+      fromEmail: process.env.FROM_EMAIL || 'NOT SET',
+      nodeEnv: process.env.NODE_ENV,
+      isRender: !!process.env.RENDER
+    });
+    throw error;
+  }
 };
 
 const sendAdminPasswordEmail = async ({ email, password, name }) => {
@@ -400,9 +477,25 @@ app.post('/api/admin/change-password', async (req, res) => {
 });
 
 app.post('/api/contact', async (req, res) => {
-  const error = validateInquiry(req.body);
-  if (error) return res.status(400).json({ message: error });
+  console.log('========================================');
+  console.log('📝 CONTACT FORM SUBMISSION');
+  console.log('========================================');
+  console.log('📝 Request body:', {
+    email: req.body.email,
+    fullName: req.body.fullName,
+    company: req.body.company,
+    interest: req.body.interest
+  });
+  console.log('========================================');
 
+  // Validate
+  const error = validateInquiry(req.body);
+  if (error) {
+    console.log('❌ Validation error:', error);
+    return res.status(400).json({ message: error });
+  }
+
+  // Prepare records
   const firestoreRecord = {
     fullName: req.body.fullName.trim(),
     email: req.body.email.trim(),
@@ -420,25 +513,95 @@ app.post('/api/contact', async (req, res) => {
     createdAt: new Date().toISOString(),
   };
 
+  // Save to Firestore
+  console.log('💾 Saving to Firestore...');
   const db = initFirebaseAdmin().firestore();
+  let docRef;
+  
   try {
-    await db.collection('inquiries').add(firestoreRecord);
+    docRef = await db.collection('inquiries').add(firestoreRecord);
+    console.log('✅ Inquiry saved to Firestore with ID:', docRef.id);
   } catch (err) {
-    console.error('Contact save error:', err);
-    const response = { message: 'Unable to save inquiry.' };
-    if (process.env.NODE_ENV !== 'production') response.error = err.message;
+    console.error('❌ Firestore save error:', {
+      message: err.message,
+      code: err.code,
+      stack: err.stack
+    });
+    const response = { 
+      message: 'Unable to save inquiry.',
+      error: err.message,
+      code: err.code || 'unknown'
+    };
+    if (process.env.NODE_ENV !== 'production') response.stack = err.stack;
     return res.status(500).json(response);
   }
 
+  // Try to send email
+  console.log('📧 Attempting to send confirmation email to:', emailRecord.email);
+  console.log('📧 Environment check:', {
+    SMTP_USER: process.env.SMTP_USER ? '✅ SET' : '❌ NOT SET',
+    SMTP_PASS: process.env.SMTP_PASS ? '✅ SET' : '❌ NOT SET',
+    FROM_EMAIL: process.env.FROM_EMAIL || '❌ NOT SET (using SMTP_USER)',
+    SMTP_HOST: process.env.SMTP_HOST || 'smtp.gmail.com (default)',
+    SMTP_PORT: process.env.SMTP_PORT || '587 (default)',
+    RENDER: process.env.RENDER ? '✅ Yes' : 'No',
+    NODE_ENV: process.env.NODE_ENV || 'development'
+  });
+  
   try {
     await sendConfirmationEmail(emailRecord);
-    return res.status(201).json({ message: 'Inquiry submitted successfully.' });
+    console.log('✅ Confirmation email sent successfully to:', emailRecord.email);
+    
+    return res.status(201).json({ 
+      message: 'Inquiry submitted successfully. Confirmation email sent.',
+      id: docRef.id 
+    });
   } catch (err) {
-    console.error('Contact email error:', err);
+    // Log EVERYTHING about the error
+    console.error('========================================');
+    console.error('❌❌❌ EMAIL SENDING FAILED ❌❌❌');
+    console.error('========================================');
+    console.error('Error Name:', err.name);
+    console.error('Error Message:', err.message);
+    console.error('Error Code:', err.code);
+    console.error('Command:', err.command);
+    console.error('Response:', err.response);
+    console.error('Response Code:', err.responseCode);
+    console.error('Stack Trace:', err.stack);
+    console.error('Recipient:', emailRecord.email);
+    console.error('SMTP User:', process.env.SMTP_USER || 'NOT SET');
+    console.error('FROM Email:', process.env.FROM_EMAIL || 'NOT SET');
+    console.error('Is Render:', !!process.env.RENDER);
+    console.error('========================================');
+    
+    // Build response with all error details
     const response = {
       message: 'Inquiry submitted successfully, but confirmation email could not be sent. We will follow up shortly.',
+      id: docRef.id,
+      emailError: err.message,
+      emailCode: err.code || 'unknown',
     };
-    if (process.env.NODE_ENV !== 'production') response.error = err.message;
+    
+    // In development, include full details
+    if (process.env.NODE_ENV !== 'production') {
+      response.debug = {
+        errorName: err.name,
+        errorMessage: err.message,
+        errorCode: err.code,
+        command: err.command,
+        response: err.response,
+        responseCode: err.responseCode,
+        stack: err.stack,
+        recipient: emailRecord.email,
+        smtpUser: process.env.SMTP_USER || 'NOT SET',
+        fromEmail: process.env.FROM_EMAIL || 'NOT SET',
+        smtpHost: process.env.SMTP_HOST || 'smtp.gmail.com',
+        smtpPort: process.env.SMTP_PORT || '587',
+        isRender: !!process.env.RENDER,
+        renderPlan: process.env.RENDER_INSTANCE_TYPE || 'unknown'
+      };
+    }
+    
     return res.status(201).json(response);
   }
 });
