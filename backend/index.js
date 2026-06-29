@@ -66,28 +66,26 @@ const FIREBASE_WEB_API_KEY = process.env.FIREBASE_WEB_API_KEY || process.env.FIR
 const createTransporter = () => {
   const smtpUser = process.env.SMTP_USER || process.env.GMAIL_USER;
   const smtpPass = process.env.SMTP_PASS || process.env.GMAIL_PASS;
+  
   if (!smtpUser || !smtpPass) {
-    throw new Error('Missing SMTP_USER/SMTP_PASS or GMAIL_USER/GMAIL_PASS in environment variables.');
+    throw new Error('Missing SMTP credentials');
   }
 
-  const smtpHost = process.env.SMTP_HOST || 'smtp.gmail.com';
-  const smtpPort = Number(process.env.SMTP_PORT || (process.env.SMTP_SECURE === 'true' ? 465 : 587));
-  const smtpSecure = process.env.SMTP_SECURE === 'true' || smtpPort === 465;
-
   return nodemailer.createTransport({
-    host: smtpHost,
-    port: smtpPort,
-    secure: smtpSecure,
+    host: 'smtp.gmail.com',
+    port: 587,
+    secure: false, // Use STARTTLS
     auth: {
       user: smtpUser,
       pass: smtpPass,
     },
-    greetingTimeout: 10000,
-    connectionTimeout: 10000,
-    socketTimeout: 10000,
-    tls: {
-      rejectUnauthorized: process.env.SMTP_REJECT_UNAUTHORIZED !== 'false',
-    },
+    // These timeouts are critical for Render
+    connectionTimeout: 30000,
+    greetingTimeout: 30000,
+    socketTimeout: 30000,
+    // For debugging
+    debug: process.env.NODE_ENV !== 'production',
+    logger: process.env.NODE_ENV !== 'production',
   });
 };
 
@@ -129,22 +127,55 @@ const sendAdminPasswordEmail = async ({ email, password, name }) => {
 };
 
 const sendConfirmationEmail = async (payload) => {
-  return sendEmail({
-    to: payload.email,
-    subject: 'Thank you for contacting AI Solutions',
-    text: `Hi ${payload.fullName},\n\nThank you for reaching out to AI Solutions. We have received your message and will respond within one business day.\n\nSummary:\n- Company: ${payload.company}\n- Primary interest: ${payload.interest || 'Not specified'}\n- Message: ${payload.jobDetails}\n\nBest regards,\nAI Solutions Team`,
-    html: `
-      <p>Hi ${payload.fullName},</p>
-      <p>Thank you for reaching out to <strong>AI Solutions</strong>. We have received your message and will respond within one business day.</p>
-      <p><strong>Summary</strong></p>
-      <ul>
-        <li><strong>Company:</strong> ${payload.company}</li>
-        <li><strong>Primary interest:</strong> ${payload.interest || 'Not specified'}</li>
-        <li><strong>Message:</strong> ${payload.jobDetails}</li>
-      </ul>
-      <p>Best regards,<br />AI Solutions Team</p>
-    `,
+  console.log('=== SENDING CONFIRMATION EMAIL ===');
+  console.log('Payload:', {
+    email: payload.email,
+    fullName: payload.fullName,
+    company: payload.company,
+    interest: payload.interest
   });
+  
+  try {
+    console.log('Attempting to send email to:', payload.email);
+    console.log('Using SMTP user:', process.env.SMTP_USER || process.env.GMAIL_USER || 'NOT SET');
+    console.log('Using FROM_EMAIL:', process.env.FROM_EMAIL || 'NOT SET');
+    
+    const emailContent = {
+      to: payload.email,
+      subject: 'Thank you for contacting AI Solutions',
+      text: `Hi ${payload.fullName},\n\nThank you for reaching out to AI Solutions. We have received your message and will respond within one business day.\n\nSummary:\n- Company: ${payload.company}\n- Primary interest: ${payload.interest || 'Not specified'}\n- Message: ${payload.jobDetails}\n\nBest regards,\nAI Solutions Team`,
+      html: `
+        <p>Hi ${payload.fullName},</p>
+        <p>Thank you for reaching out to <strong>AI Solutions</strong>. We have received your message and will respond within one business day.</p>
+        <p><strong>Summary</strong></p>
+        <ul>
+          <li><strong>Company:</strong> ${payload.company}</li>
+          <li><strong>Primary interest:</strong> ${payload.interest || 'Not specified'}</li>
+          <li><strong>Message:</strong> ${payload.jobDetails}</li>
+        </ul>
+        <p>Best regards,<br />AI Solutions Team</p>
+      `
+    };
+    
+    console.log('Email content prepared, calling sendEmail...');
+    const result = await sendEmail(emailContent);
+    
+    console.log('Confirmation email sent successfully to:', payload.email);
+    console.log('=== CONFIRMATION EMAIL SENT ===');
+    return result;
+  } catch (error) {
+    console.error('=== CONFIRMATION EMAIL FAILED ===');
+    console.error('Detailed email error:', {
+      message: error.message,
+      code: error.code,
+      command: error.command,
+      response: error.response,
+      responseCode: error.responseCode,
+      stack: error.stack,
+      recipient: payload.email
+    });
+    throw error;
+  }
 };
 
 app.post('/api/upload-image', async (req, res) => {

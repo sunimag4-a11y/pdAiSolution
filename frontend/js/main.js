@@ -786,7 +786,7 @@ function initContactForm() {
       const result = await response.json();
       if (!response.ok) throw new Error(result.message || 'Submission failed.');
 
-      setStatus("Message received! Thank you — we'll follow up within one business day.");
+      setStatus("Message received! Thank you, we'll follow up within one business day.");
       showToast('Message sent successfully.', 'success');
       form.reset();
       form.style.display = 'none';
