@@ -64,9 +64,12 @@ const validateInquiry = (body) => {
 const FIREBASE_WEB_API_KEY = process.env.FIREBASE_WEB_API_KEY || process.env.FIREBASE_API_KEY;
 
 const createTransporter = () => {
-  const smtpUser = process.env.SMTP_USER || process.env.GMAIL_USER;
-  const smtpPass = process.env.SMTP_PASS || process.env.GMAIL_PASS;
-  
+  const smtpUser = String(process.env.SMTP_USER || process.env.GMAIL_USER || '').trim();
+  const smtpPass = String(process.env.SMTP_PASS || process.env.GMAIL_PASS || '').trim().replace(/\s+/g, '');
+  const smtpHost = process.env.SMTP_HOST || 'smtp.gmail.com';
+  const smtpPort = Number(process.env.SMTP_PORT || 587);
+  const smtpSecure = process.env.SMTP_SECURE === 'true' || smtpPort === 465;
+
   if (!smtpUser || !smtpPass) {
     console.error('❌ Missing SMTP credentials:', {
       hasSMTPUser: !!smtpUser,
@@ -76,34 +79,38 @@ const createTransporter = () => {
   }
 
   // Log connection attempt (hide password)
-  console.log('📧 Creating Gmail transporter with:', {
+  console.log('📧 Creating transporter with:', {
     user: smtpUser.substring(0, 5) + '...' + smtpUser.substring(smtpUser.indexOf('@')),
-    host: process.env.SMTP_HOST || 'smtp.gmail.com',
-    port: Number(process.env.SMTP_PORT || 587),
-    secure: process.env.SMTP_SECURE === 'true' || Number(process.env.SMTP_PORT || 587) === 465,
+    host: smtpHost,
+    port: smtpPort,
+    secure: smtpSecure,
     hasPassword: !!smtpPass
   });
 
-  const transporter = nodemailer.createTransport({
-    host: process.env.SMTP_HOST || 'smtp.gmail.com',
-    port: Number(process.env.SMTP_PORT || 587),
-    secure: process.env.SMTP_SECURE === 'true' || Number(process.env.SMTP_PORT || 587) === 465,
+  const transporterConfig = {
     auth: {
       user: smtpUser,
       pass: smtpPass,
     },
-    // Increase timeouts significantly
-    connectionTimeout: 60000,  // 60 seconds
-    greetingTimeout: 60000,    // 60 seconds
-    socketTimeout: 60000,      // 60 seconds
+    connectionTimeout: 30000,
+    greetingTimeout: 30000,
+    socketTimeout: 30000,
     tls: {
-      rejectUnauthorized: false, // Sometimes needed on Render
+      rejectUnauthorized: false,
     },
     debug: process.env.NODE_ENV !== 'production',
     logger: process.env.NODE_ENV !== 'production',
-  });
+  };
 
-  return transporter;
+  if (!process.env.SMTP_HOST && !process.env.SMTP_PORT) {
+    transporterConfig.service = 'gmail';
+  } else {
+    transporterConfig.host = smtpHost;
+    transporterConfig.port = smtpPort;
+    transporterConfig.secure = smtpSecure;
+  }
+
+  return nodemailer.createTransport(transporterConfig);
 };
 
 
