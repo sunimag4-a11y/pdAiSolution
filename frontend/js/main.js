@@ -110,7 +110,7 @@ function adminLogout() {
   const auth = firebase.auth();
   auth.signOut().finally(() => {
     setAdminAuthenticated(false);
-    window.location.replace('frontend/admin/login.html');
+    window.location.replace('login.html');
   });
 }
 
