@@ -161,10 +161,15 @@ function initPageSpecific() {
   if (page.includes('admin/events')) initAdminEvents();
   if (page.includes('admin/gallery')) initAdminGallery();
 
-  const currentFile = page.split('/').pop();
-  if (currentFile === 'article.html') initArticleDetail();
-  else if (!page.includes('/admin/') && currentFile === 'articles.html') initArticles();
-  else if (!page.includes('/admin/') && currentFile === 'events.html') initEvents();
+  const currentFile = page.split('/').pop().split('?')[0];
+  const route = page;
+
+  // Support both file-based routes (article.html, articles.html) and
+  // pretty routes used by hosts like Netlify/Vercel (e.g. /article, /articles).
+  // Check the plural '/articles' first to avoid matching it as '/article'.
+  if (!route.includes('/admin/') && (route.includes('/articles') || currentFile === 'articles.html' || currentFile === 'articles')) initArticles();
+  else if ((route.includes('/article/') || route.endsWith('/article') || currentFile === 'article.html' || currentFile === 'article' || page.includes('/article.html'))) initArticleDetail();
+  else if (!route.includes('/admin/') && (route.includes('/events') || currentFile === 'events.html' || currentFile === 'events')) initEvents();
 }
 
 // ========== HOME: Particle canvas ==========
