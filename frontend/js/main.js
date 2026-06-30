@@ -58,7 +58,7 @@ const FIREBASE_CONFIG = {
   measurementId: 'G-9MYRF6NNNV',
 };
 
-const PRODUCTION_API_BASE = 'https://pdaisolution.onrender.com';
+const PRODUCTION_API_BASE = 'https://pd-ai-solution-three.vercel.app';
 
 function getApiBase() {
   if (window.location.protocol === 'file:') {
