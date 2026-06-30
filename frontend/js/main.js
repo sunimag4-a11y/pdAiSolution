@@ -509,7 +509,10 @@ function initGallery() {
       const res = await fetch(galleryUrl);
       if (!res.ok) throw new Error('Unable to fetch gallery items');
       const data = await res.json();
-      renderGalleryItems(Array.isArray(data) ? data : []);
+      const filtered = Array.isArray(data)
+        ? data.filter((item) => String(item.status || '').toLowerCase() === 'published')
+        : [];
+      renderGalleryItems(filtered);
     } catch (err) {
       console.error('Gallery load failed', err);
       grid.innerHTML = '<div class="card"><p style="margin:0;color:#ef4444">Unable to load gallery images.</p></div>';
@@ -657,7 +660,10 @@ function initArticles() {
       const res = await fetch(articlesUrl);
       if (!res.ok) throw new Error('Unable to load articles');
       const data = await res.json();
-      renderArticleCards(Array.isArray(data) ? data : []);
+      const filtered = Array.isArray(data)
+        ? data.filter((article) => String(article.status || '').toLowerCase() === 'published')
+        : [];
+      renderArticleCards(filtered);
     } catch (err) {
       console.error('Failed to load articles', err);
       grid.innerHTML = '<div class="card"><p style="margin:0;color:#ef4444">Unable to load articles.</p></div>';
@@ -724,6 +730,10 @@ function initArticleDetail() {
       }
       if (!res.ok) throw new Error('Unable to load article');
       const article = await res.json();
+      if (article && String(article.status || '').toLowerCase() !== 'published') {
+        renderArticleDetail(null);
+        return;
+      }
       renderArticleDetail(article);
     } catch (err) {
       console.error('Failed to load article', err);
@@ -1718,12 +1728,40 @@ function initAdminArticles() {
           <h4 style="margin:0 0 .35rem;">${escapeHtml(data.title || `Article ${id}`)}</h4>
           <p style="margin:0;color:var(--muted);font-size:.92rem;">${escapeHtml(subtitle)}</p>
         </div>
-        <button type="button" class="edit-article-btn" style="padding:.45rem .8rem;border:1px solid var(--cyan);border-radius:6px;background:transparent;color:var(--cyan);font-size:.85rem;cursor:pointer">Edit</button>
+        <div style="display:flex;gap:.5rem;align-items:center;">
+          <button type="button" class="edit-article-btn" style="padding:.45rem .8rem;border:1px solid var(--cyan);border-radius:6px;background:transparent;color:var(--cyan);font-size:.85rem;cursor:pointer">Edit</button>
+          <button type="button" class="delete-article-btn button button-danger" style="font-size:.85rem;">Delete</button>
+        </div>
       </div>
       <div style="margin-top:.75rem;font-size:.85rem;color:var(--muted);">${escapeHtml(details)}</div>
     `;
     card.querySelector('.edit-article-btn').addEventListener('click', () => setArticleForm(id, data));
+    card.querySelector('.delete-article-btn').addEventListener('click', () => deleteArticleById(id));
     return card;
+  };
+
+  const deleteArticleById = async (id) => {
+    if (!id || !confirm('Delete this article? This action cannot be undone.')) return;
+    try {
+      const res = await fetch(`${getApiBase()}/api/articles/${encodeURIComponent(id)}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const err = await res.json().catch(() => null);
+        throw new Error(err?.message || 'Unable to delete article.');
+      }
+      if (message) {
+        message.textContent = 'Article deleted successfully.';
+        message.className = 'fsuc show';
+        message.style.display = 'block';
+      }
+      refreshArticles();
+    } catch (err) {
+      console.error('Delete article failed', err);
+      if (message) {
+        message.textContent = 'Failed to delete article. Please try again.';
+        message.className = 'ferr show';
+        message.style.display = 'block';
+      }
+    }
   };
 
   const refreshArticles = async () => {
@@ -1924,12 +1962,41 @@ function initAdminEvents() {
           <h4 style="margin:0 0 .35rem;">${escapeHtml(data.title || `Event ${id}`)}</h4>
           <p style="margin:0;color:var(--muted);font-size:.92rem;">${escapeHtml(subtitle)}</p>
         </div>
-        <button type="button" class="button button-secondary" style="font-size:.85rem;align-self:flex-start">Edit</button>
+        <div style="display:flex;gap:.5rem;align-items:center;">
+          <button type="button" class="button button-secondary" style="font-size:.85rem;align-self:flex-start">Edit</button>
+          <button type="button" class="button button-danger" style="font-size:.85rem;align-self:flex-start">Delete</button>
+        </div>
       </div>
       <div style="margin-top:.75rem;font-size:.85rem;color:var(--muted);">${escapeHtml(details)}</div>
     `;
-    card.querySelector('button').addEventListener('click', () => setEventForm(id, data));
+    const buttons = card.querySelectorAll('button');
+    buttons[0].addEventListener('click', () => setEventForm(id, data));
+    buttons[1].addEventListener('click', () => deleteEventById(id));
     return card;
+  };
+
+  const deleteEventById = async (id) => {
+    if (!id || !confirm('Delete this event? This action cannot be undone.')) return;
+    try {
+      const res = await fetch(`${getApiBase()}/api/events/${encodeURIComponent(id)}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const err = await res.json().catch(() => null);
+        throw new Error(err?.message || 'Unable to delete event.');
+      }
+      if (message) {
+        message.textContent = 'Event deleted successfully.';
+        message.className = 'fsuc show';
+        message.style.display = 'block';
+      }
+      refreshEvents();
+    } catch (err) {
+      console.error('Delete event failed', err);
+      if (message) {
+        message.textContent = 'Failed to delete event. Please try again.';
+        message.className = 'ferr show';
+        message.style.display = 'block';
+      }
+    }
   };
 
   const refreshEvents = async () => {
@@ -2145,15 +2212,44 @@ function initAdminGallery() {
           <p style="margin:0;color:var(--muted);font-size:.92rem;">${escapeHtml(subtitle)}</p>
           <p style="margin:.65rem 0 0;color:var(--muted);font-size:.85rem;">${escapeHtml(data.description || 'No description')}</p>
         </div>
-        <button type="button" class="button button-secondary" style="font-size:.85rem;align-self:flex-start">Edit</button>
+        <div style="display:flex;gap:.5rem;align-items:center;">
+          <button type="button" class="button button-secondary" style="font-size:.85rem;align-self:flex-start">Edit</button>
+          <button type="button" class="button button-danger" style="font-size:.85rem;align-self:flex-start">Delete</button>
+        </div>
       </div>
       <div style="margin-top:.75rem;display:flex;gap:1rem;align-items:center;">
         ${data.image ? `<img src="${escapeHtml(data.image)}" alt="${escapeHtml(data.title || 'Gallery image')}" style="width:96px;height:80px;object-fit:cover;border-radius:.65rem;border:1px solid rgba(148,163,184,.25);"/>` : ''}
         <span style="color:var(--muted);font-size:.85rem;">${escapeHtml(details)}</span>
       </div>
     `;
-    card.querySelector('button').addEventListener('click', () => setGalleryForm(id, data));
+    const buttons = card.querySelectorAll('button');
+    buttons[0].addEventListener('click', () => setGalleryForm(id, data));
+    buttons[1].addEventListener('click', () => deleteGalleryById(id));
     return card;
+  };
+
+  const deleteGalleryById = async (id) => {
+    if (!id || !confirm('Delete this gallery item? This action cannot be undone.')) return;
+    try {
+      const res = await fetch(`${getApiBase()}/api/gallery/${encodeURIComponent(id)}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const err = await res.json().catch(() => null);
+        throw new Error(err?.message || 'Unable to delete gallery item.');
+      }
+      if (message) {
+        message.textContent = 'Gallery item deleted successfully.';
+        message.className = 'fsuc show';
+        message.style.display = 'block';
+      }
+      refreshGalleryItems();
+    } catch (err) {
+      console.error('Delete gallery item failed', err);
+      if (message) {
+        message.textContent = 'Failed to delete gallery item. Please try again.';
+        message.className = 'ferr show';
+        message.style.display = 'block';
+      }
+    }
   };
 
   const refreshGalleryItems = async () => {

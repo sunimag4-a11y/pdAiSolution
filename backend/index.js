@@ -1011,26 +1011,59 @@ app.patch('/api/articles/:id', async (req, res) => {
   }
 });
 
-// Update inquiry (e.g., status)
-app.patch('/api/inquiries/:id', async (req, res) => {
+// Delete an article
+app.delete('/api/articles/:id', async (req, res) => {
   const id = req.params.id;
-  const { status } = req.body;
-  if (!status) return res.status(400).json({ message: 'Missing status' });
+  if (!id) return res.status(400).json({ message: 'Article ID is required.' });
   try {
     const db = initFirebaseAdmin().firestore();
-    const ref = db.collection('inquiries').doc(id);
+    const ref = db.collection('articles').doc(id);
     const doc = await ref.get();
-    if (!doc.exists) return res.status(404).json({ message: 'Inquiry not found' });
-    await ref.update({ status, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
-    return res.json({ message: 'Inquiry updated' });
+    if (!doc.exists) return res.status(404).json({ message: 'Article not found.' });
+    await ref.delete();
+    return res.json({ message: 'Article deleted successfully.' });
   } catch (err) {
-    console.error('Update inquiry error:', err);
-    return res.status(500).json({ message: 'Unable to update inquiry.' });
+    console.error('Delete article error:', err);
+    return res.status(500).json({ message: 'Unable to delete article.' });
   }
 });
 
-// Reply to an inquiry by sending an email
-app.post('/api/inquiries/:id/reply', async (req, res) => {
+// Delete an event
+app.delete('/api/events/:id', async (req, res) => {
+  const id = req.params.id;
+  if (!id) return res.status(400).json({ message: 'Event ID is required.' });
+  try {
+    const db = initFirebaseAdmin().firestore();
+    const ref = db.collection('events').doc(id);
+    const doc = await ref.get();
+    if (!doc.exists) return res.status(404).json({ message: 'Event not found.' });
+    await ref.delete();
+    return res.json({ message: 'Event deleted successfully.' });
+  } catch (err) {
+    console.error('Delete event error:', err);
+    return res.status(500).json({ message: 'Unable to delete event.' });
+  }
+});
+
+// Delete a gallery item
+app.delete('/api/gallery/:id', async (req, res) => {
+  const id = req.params.id;
+  if (!id) return res.status(400).json({ message: 'Gallery item ID is required.' });
+  try {
+    const db = initFirebaseAdmin().firestore();
+    const ref = db.collection('gallery').doc(id);
+    const doc = await ref.get();
+    if (!doc.exists) return res.status(404).json({ message: 'Gallery item not found.' });
+    await ref.delete();
+    return res.json({ message: 'Gallery item deleted successfully.' });
+  } catch (err) {
+    console.error('Delete gallery item error:', err);
+    return res.status(500).json({ message: 'Unable to delete gallery item.' });
+  }
+});
+
+// Update inquiry (e.g., status)
+app.patch('/api/inquiries/:id', async (req, res) => {
   const id = req.params.id;
   const { subject, message } = req.body;
   if (!subject || !message) return res.status(400).json({ message: 'Missing subject or message' });
