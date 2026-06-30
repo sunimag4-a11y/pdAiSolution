@@ -231,27 +231,45 @@ function initParticles() {
 function initCounters() {
   const counters = document.querySelectorAll('.snum[data-target]');
   if (!counters.length) return;
+
+  const animateCounter = (el) => {
+    if (!el || el.__animated) return;
+    const target = parseInt(el.dataset.target, 10) || 0;
+    const suffix = el.dataset.suffix || '';
+    const prefix = el.dataset.prefix || '';
+    const dur = Number(el.dataset.duration) || 1400;
+    const start = performance.now();
+    const tick = (now) => {
+      const elapsed = now - start;
+      const progress = Math.min(elapsed / dur, 1);
+      const eased = 1 - Math.pow(1 - progress, 3);
+      el.textContent = prefix + Math.floor(eased * target) + suffix;
+      if (progress < 1) requestAnimationFrame(tick);
+    };
+    el.__animated = true;
+    requestAnimationFrame(tick);
+  };
+
   const io = new IntersectionObserver((entries) => {
     entries.forEach(e => {
       if (!e.isIntersecting) return;
-      const el = e.target;
-      const target = parseInt(el.dataset.target, 10);
-      const suffix = el.dataset.suffix || '';
-      const prefix = el.dataset.prefix || '';
-      const dur = 1800;
-      const start = performance.now();
-      const tick = (now) => {
-        const elapsed = now - start;
-        const progress = Math.min(elapsed / dur, 1);
-        const eased = 1 - Math.pow(1 - progress, 3);
-        el.textContent = prefix + Math.floor(eased * target) + suffix;
-        if (progress < 1) requestAnimationFrame(tick);
-      };
-      requestAnimationFrame(tick);
-      io.unobserve(el);
+      animateCounter(e.target);
+      io.unobserve(e.target);
     });
   }, { threshold: .5 });
-  counters.forEach(c => io.observe(c));
+
+  counters.forEach((c) => {
+    io.observe(c);
+    const rect = c.getBoundingClientRect();
+    const vh = window.innerHeight || document.documentElement.clientHeight;
+    if (rect.top < vh * 0.85 && rect.bottom > 0) {
+      animateCounter(c);
+      io.unobserve(c);
+    }
+  });
+  // Ensure counters animate even if IO doesn't fire or is blocked by the environment.
+  // animateCounter is idempotent due to the __animated flag.
+  counters.forEach((c) => { animateCounter(c); });
 }
 
 function initChatbot() {
