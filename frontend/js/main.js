@@ -403,9 +403,13 @@ function initChatbot() {
 
 // ========== GALLERY: Lightbox and data fetch ==========
 function initGallery() {
-  const grid = document.querySelector('.gal-grid');
+  const grid = document.getElementById('galleryGrid') || document.querySelector('.gal-grid');
   const filterButtons = document.querySelectorAll('.gf-btn');
   const lb = document.getElementById('lb');
+  const pagination = document.getElementById('galleryPagination');
+  const prevBtn = document.getElementById('galleryPrevBtn');
+  const nextBtn = document.getElementById('galleryNextBtn');
+  const pageLabel = document.getElementById('galleryPageLabel');
   const lbImg = document.getElementById('lbImg');
   const lbClose = document.getElementById('lbClose');
   const lbPrev = document.getElementById('lbPrev');
@@ -417,6 +421,9 @@ function initGallery() {
 
   let current = 0;
   let activeFilter = 'all';
+  let allGalleryItems = [];
+  let currentGalleryPage = 1;
+  const galleryPerPage = 8;
 
   const getVisibleItems = () => Array.from(grid.querySelectorAll('.gal-item')).filter((item) => {
     const cat = (item.dataset.cat || '').toLowerCase();
@@ -458,13 +465,6 @@ function initGallery() {
     });
   };
 
-  const applyGalleryFilter = () => {
-    grid.querySelectorAll('.gal-item').forEach((item) => {
-      const cat = (item.dataset.cat || '').toLowerCase();
-      item.style.display = (activeFilter === 'all' || cat === activeFilter) ? '' : 'none';
-    });
-  };
-
   const setActiveFilterButton = (filter) => {
     filterButtons.forEach((button) => {
       button.className = `btn btn-${button.dataset.filter === filter ? 'primary' : 'ghost'} btn-sm gf-btn`;
@@ -475,19 +475,42 @@ function initGallery() {
     filterButtons.forEach((button) => {
       button.addEventListener('click', () => {
         activeFilter = button.dataset.filter || 'all';
+        currentGalleryPage = 1;
         setActiveFilterButton(activeFilter);
-        applyGalleryFilter();
+        renderGalleryItems(allGalleryItems);
       });
     });
   };
 
+  const updateGalleryPagination = (items) => {
+    if (!pagination || !prevBtn || !nextBtn || !pageLabel) return;
+    const pageCount = Math.max(1, Math.ceil(items.length / galleryPerPage));
+    pagination.style.display = items.length <= galleryPerPage ? 'none' : 'flex';
+    prevBtn.disabled = currentGalleryPage <= 1;
+    nextBtn.disabled = currentGalleryPage >= pageCount;
+    pageLabel.textContent = `Page ${currentGalleryPage} of ${pageCount}`;
+  };
+
   const renderGalleryItems = (items) => {
-    if (!items.length) {
+    allGalleryItems = Array.isArray(items) ? items : [];
+    const filtered = allGalleryItems.filter((item) => {
+      const cat = String(item.category || 'other').toLowerCase();
+      return activeFilter === 'all' || cat === activeFilter;
+    });
+
+    if (!filtered.length) {
       grid.innerHTML = '<div class="card"><p style="margin:0;color:var(--muted)">No gallery images to show.</p></div>';
+      updateGalleryPagination([]);
       return;
     }
 
-    grid.innerHTML = items.map((item) => `
+    const pageCount = Math.max(1, Math.ceil(filtered.length / galleryPerPage));
+    if (currentGalleryPage > pageCount) currentGalleryPage = pageCount;
+    if (currentGalleryPage < 1) currentGalleryPage = 1;
+    const start = (currentGalleryPage - 1) * galleryPerPage;
+    const pageItems = filtered.slice(start, start + galleryPerPage);
+
+    grid.innerHTML = pageItems.map((item) => `
       <div class="gal-item reveal visible" data-cat="${escapeHtml(String(item.category || 'other').toLowerCase())}">
         <img src="${escapeHtml(String(item.image || ''))}" alt="${escapeHtml(String(item.title || 'Gallery image'))}" loading="lazy">
         <div class="gal-ov"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35M11 8v6M8 11h6"/></svg></div>
@@ -500,8 +523,22 @@ function initGallery() {
     `).join('');
 
     bindLightboxItems();
-    applyGalleryFilter();
+    updateGalleryPagination(filtered);
+    initReveal();
   };
+
+  if (prevBtn) {
+    prevBtn.addEventListener('click', () => {
+      currentGalleryPage -= 1;
+      renderGalleryItems(allGalleryItems);
+    });
+  }
+  if (nextBtn) {
+    nextBtn.addEventListener('click', () => {
+      currentGalleryPage += 1;
+      renderGalleryItems(allGalleryItems);
+    });
+  }
 
   const loadGallery = async () => {
     grid.innerHTML = '<div class="card"><p style="margin:0;color:var(--muted)">Loading gallery…</p></div>';
@@ -512,6 +549,7 @@ function initGallery() {
       const filtered = Array.isArray(data)
         ? data.filter((item) => String(item.status || '').toLowerCase() === 'published')
         : [];
+      currentGalleryPage = 1;
       renderGalleryItems(filtered);
     } catch (err) {
       console.error('Gallery load failed', err);
@@ -537,6 +575,10 @@ function initGallery() {
 function initEvents() {
   const upcomingContainer = document.getElementById('upcomingEvents');
   const pastContainer = document.getElementById('pastEvents');
+  const pagination = document.getElementById('upcomingPagination');
+  const prevBtn = document.getElementById('upcomingPrevBtn');
+  const nextBtn = document.getElementById('upcomingNextBtn');
+  const pageLabel = document.getElementById('upcomingPageLabel');
   if (!upcomingContainer || !pastContainer) return;
 
   const apiBase = getApiBase();
@@ -583,12 +625,52 @@ function initEvents() {
     `;
   };
 
+  let currentUpcomingPage = 1;
+  const eventsPerPage = 4;
+
   const now = new Date();
   const isUpcoming = (event) => {
     if (!event.eventDate) return false;
     const eventDate = new Date(event.eventDate);
     return eventDate >= new Date(now.getFullYear(), now.getMonth(), now.getDate());
   };
+
+  const updateUpcomingPagination = (items) => {
+    if (!pagination || !prevBtn || !nextBtn || !pageLabel) return;
+    const pageCount = Math.max(1, Math.ceil(items.length / eventsPerPage));
+    pagination.style.display = items.length <= eventsPerPage ? 'none' : 'flex';
+    prevBtn.disabled = currentUpcomingPage <= 1;
+    nextBtn.disabled = currentUpcomingPage >= pageCount;
+    pageLabel.textContent = `Page ${currentUpcomingPage} of ${pageCount}`;
+  };
+
+  const renderUpcomingEvents = (events) => {
+    const pageCount = Math.max(1, Math.ceil(events.length / eventsPerPage));
+    if (currentUpcomingPage > pageCount) currentUpcomingPage = pageCount;
+    if (currentUpcomingPage < 1) currentUpcomingPage = 1;
+    const start = (currentUpcomingPage - 1) * eventsPerPage;
+    const pageEvents = events.slice(start, start + eventsPerPage);
+    upcomingContainer.innerHTML = pageEvents.length
+      ? pageEvents.map(renderEventCard).join('')
+      : '<div class="card"><p style="margin:0;color:var(--muted)">No upcoming events at the moment.</p></div>';
+    updateUpcomingPagination(events);
+    initReveal();
+  };
+
+  if (prevBtn) {
+    prevBtn.addEventListener('click', () => {
+      currentUpcomingPage -= 1;
+      renderUpcomingEvents(upcomingEventsList);
+    });
+  }
+  if (nextBtn) {
+    nextBtn.addEventListener('click', () => {
+      currentUpcomingPage += 1;
+      renderUpcomingEvents(upcomingEventsList);
+    });
+  }
+
+  let upcomingEventsList = [];
 
   const loadEvents = async () => {
     upcomingContainer.innerHTML = '<div class="card"><p style="margin:0;color:var(--muted)">Loading upcoming events…</p></div>';
@@ -598,12 +680,10 @@ function initEvents() {
       if (!res.ok) throw new Error('Unable to load events');
       const data = await res.json();
       const events = Array.isArray(data) ? data : [];
-      const upcoming = events.filter(isUpcoming);
+      upcomingEventsList = events.filter(isUpcoming);
       const past = events.filter((event) => !isUpcoming(event));
-
-      upcomingContainer.innerHTML = upcoming.length
-        ? upcoming.map(renderEventCard).join('')
-        : '<div class="card"><p style="margin:0;color:var(--muted)">No upcoming events at the moment.</p></div>';
+      currentUpcomingPage = 1;
+      renderUpcomingEvents(upcomingEventsList);
       pastContainer.innerHTML = past.length
         ? past.map(renderEventCard).join('')
         : '<div class="card"><p style="margin:0;color:var(--muted)">No past events found.</p></div>';
@@ -621,18 +701,42 @@ function initEvents() {
 
 function initArticles() {
   const grid = document.getElementById('articleGrid');
+  const pagination = document.getElementById('articlePagination');
+  const prevBtn = document.getElementById('articlePrevBtn');
+  const nextBtn = document.getElementById('articleNextBtn');
+  const pageLabel = document.getElementById('articlePageLabel');
   if (!grid) return;
 
   const apiBase = getApiBase();
   const articlesUrl = `${apiBase}/api/articles`;
+  let allArticles = [];
+  let currentArticlePage = 1;
+  const articlesPerPage = 6;
+
+  const updateArticlePagination = (articles) => {
+    if (!pagination || !prevBtn || !nextBtn || !pageLabel) return;
+    const pageCount = Math.max(1, Math.ceil(articles.length / articlesPerPage));
+    pagination.style.display = articles.length <= articlesPerPage ? 'none' : 'flex';
+    prevBtn.disabled = currentArticlePage <= 1;
+    nextBtn.disabled = currentArticlePage >= pageCount;
+    pageLabel.textContent = `Page ${currentArticlePage} of ${pageCount}`;
+  };
 
   const renderArticleCards = (articles) => {
-    if (!articles.length) {
+    allArticles = Array.isArray(articles) ? articles : [];
+    const pageCount = Math.max(1, Math.ceil(allArticles.length / articlesPerPage));
+    if (currentArticlePage > pageCount) currentArticlePage = pageCount;
+    if (currentArticlePage < 1) currentArticlePage = 1;
+    const start = (currentArticlePage - 1) * articlesPerPage;
+    const pageArticles = allArticles.slice(start, start + articlesPerPage);
+
+    if (!pageArticles.length) {
       grid.innerHTML = '<div class="card"><p style="margin:0;color:var(--muted)">No articles available at the moment.</p></div>';
+      updateArticlePagination([]);
       return;
     }
 
-    grid.innerHTML = articles.map((article) => {
+    grid.innerHTML = pageArticles.map((article) => {
       const publishedAt = article.publishedAt ? new Date(article.publishedAt).toLocaleDateString() : 'Date unavailable';
       const label = article.status || 'Article';
       const imageUrl = Array.isArray(article.images) && article.images.length > 0 ? String(article.images[0]) : '';
@@ -652,7 +756,22 @@ function initArticles() {
         </div>
       `;
     }).join('');
+    updateArticlePagination(allArticles);
+    initReveal();
   };
+
+  if (prevBtn) {
+    prevBtn.addEventListener('click', () => {
+      currentArticlePage -= 1;
+      renderArticleCards(allArticles);
+    });
+  }
+  if (nextBtn) {
+    nextBtn.addEventListener('click', () => {
+      currentArticlePage += 1;
+      renderArticleCards(allArticles);
+    });
+  }
 
   const loadArticles = async () => {
     grid.innerHTML = '<div class="card"><p style="margin:0;color:var(--muted)">Loading articles…</p></div>';
@@ -663,6 +782,7 @@ function initArticles() {
       const filtered = Array.isArray(data)
         ? data.filter((article) => String(article.status || '').toLowerCase() === 'published')
         : [];
+      currentArticlePage = 1;
       renderArticleCards(filtered);
     } catch (err) {
       console.error('Failed to load articles', err);
@@ -843,6 +963,7 @@ function initAdminLogin() {
   const emailInput = document.getElementById('adminEmail');
   const passwordInput = document.getElementById('adminPassword');
   const loginStatus = document.getElementById('loginStatus');
+  const submitButton = passwordForm.querySelector('button[type="submit"]');
   if (!googleButton || !passwordForm || !emailInput || !passwordInput) return;
 
   const apiBase = getApiBase();
@@ -871,8 +992,20 @@ function initAdminLogin() {
     loginStatus.textContent = '';
   };
 
+  const setLoginBusy = (isBusy, busyLabel = 'Please wait…') => {
+    if (submitButton) {
+      setBusyButtonState(submitButton, isBusy, busyLabel, 'Login with password');
+    }
+    googleButton.disabled = isBusy;
+    googleButton.style.opacity = isBusy ? '0.7' : '';
+    googleButton.style.cursor = isBusy ? 'wait' : '';
+    if (emailInput) emailInput.disabled = isBusy;
+    if (passwordInput) passwordInput.disabled = isBusy;
+  };
+
   googleButton.addEventListener('click', async () => {
     clearLoginError();
+    setLoginBusy(true, 'Signing in…');
 
     if (!window.firebase || !firebase.auth) {
       showLoginError('Firebase failed to load. Please refresh the page.');
@@ -913,12 +1046,16 @@ function initAdminLogin() {
     } catch (err) {
       showLoginError(err.message || 'Unable to complete Google sign-in.');
       console.error('Admin login failed', err);
+    } finally {
+      setLoginBusy(false);
     }
   });
 
   passwordForm.addEventListener('submit', async (event) => {
     event.preventDefault();
     clearLoginError();
+    setLoginBusy(true, 'Checking credentials…');
+    showLoginStatus('Signing you in…');
 
     if (!window.firebase || !firebase.auth) {
       showLoginError('Firebase failed to load. Please refresh the page.');
@@ -967,6 +1104,8 @@ function initAdminLogin() {
       showLoginError(err.message || 'Unable to sign in with password.');
       clearLoginStatus();
       console.error('Admin password login failed', err);
+    } finally {
+      setLoginBusy(false);
     }
   });
 }
@@ -1175,6 +1314,19 @@ function escapeHtml(s) {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
+}
+
+function setBusyButtonState(button, isBusy, busyLabel, idleLabel) {
+  if (!button) return;
+  if (isBusy) {
+    button.dataset.idleText = button.dataset.idleText || button.textContent.trim() || idleLabel;
+    button.textContent = busyLabel;
+    button.disabled = true;
+  } else {
+    button.textContent = button.dataset.idleText || idleLabel;
+    button.disabled = false;
+    delete button.dataset.idleText;
+  }
 }
 
 // Toast helper
@@ -1683,6 +1835,12 @@ function initAdminArticles() {
   let editingArticleImages = [];
   const articleFormTitle = document.getElementById('articleFormTitle');
   const cancelEditButton = document.getElementById('cancelArticleEdit');
+  const submitButton = form ? form.querySelector('button[type="submit"]') : null;
+
+  const updateArticleSubmitLabel = () => {
+    if (!submitButton) return;
+    submitButton.textContent = editingArticleId ? 'Update Article' : 'Save Article';
+  };
 
   const resetArticleForm = () => {
     editingArticleId = null;
@@ -1695,6 +1853,7 @@ function initAdminArticles() {
     if (form.articleImages) form.articleImages.value = '';
     if (articleFormTitle) articleFormTitle.textContent = 'New Article';
     if (cancelEditButton) cancelEditButton.style.display = 'none';
+    updateArticleSubmitLabel();
     renderImagePreview([]);
     if (message) {
       message.textContent = '';
@@ -1713,6 +1872,7 @@ function initAdminArticles() {
     form.articleStatus.value = data.status || 'Draft';
     if (articleFormTitle) articleFormTitle.textContent = 'Edit Article';
     if (cancelEditButton) cancelEditButton.style.display = 'inline-flex';
+    updateArticleSubmitLabel();
     renderImagePreview(editingArticleImages);
   };
 
@@ -1736,12 +1896,15 @@ function initAdminArticles() {
       <div style="margin-top:.75rem;font-size:.85rem;color:var(--muted);">${escapeHtml(details)}</div>
     `;
     card.querySelector('.edit-article-btn').addEventListener('click', () => setArticleForm(id, data));
-    card.querySelector('.delete-article-btn').addEventListener('click', () => deleteArticleById(id));
+    card.querySelector('.delete-article-btn').addEventListener('click', () => deleteArticleById(id, card.querySelector('.delete-article-btn')));
     return card;
   };
 
-  const deleteArticleById = async (id) => {
+  const deleteArticleById = async (id, button = null) => {
     if (!id || !confirm('Delete this article? This action cannot be undone.')) return;
+    const deleteButton = button || document.querySelector(`[data-article-id="${id}"]`);
+    setBusyButtonState(deleteButton, true, 'Deleting…', 'Delete');
+    showToast('Deleting article…', 'info', 2000);
     try {
       const res = await fetch(`${getApiBase()}/api/articles/${encodeURIComponent(id)}`, { method: 'DELETE' });
       if (!res.ok) {
@@ -1753,6 +1916,7 @@ function initAdminArticles() {
         message.className = 'fsuc show';
         message.style.display = 'block';
       }
+      showToast('Article deleted successfully.', 'success');
       refreshArticles();
     } catch (err) {
       console.error('Delete article failed', err);
@@ -1761,6 +1925,9 @@ function initAdminArticles() {
         message.className = 'ferr show';
         message.style.display = 'block';
       }
+      showToast(err.message || 'Failed to delete article.', 'error');
+    } finally {
+      setBusyButtonState(deleteButton, false, 'Deleting…', 'Delete');
     }
   };
 
@@ -1805,8 +1972,11 @@ function initAdminArticles() {
           message.className = 'ferr show';
           message.style.display = 'block';
         }
+        showToast('Title and content are required.', 'error');
         return;
       }
+      setBusyButtonState(submitButton, true, editingArticleId ? 'Updating…' : 'Saving…', editingArticleId ? 'Update Article' : 'Save Article');
+      showToast(editingArticleId ? 'Updating article…' : 'Saving article…', 'info', 2000);
       const imageFiles = form.articleImages?.files ? Array.from(form.articleImages.files) : [];
       if (imageFiles.length > 2) {
         if (message) {
@@ -1814,6 +1984,8 @@ function initAdminArticles() {
           message.className = 'ferr show';
           message.style.display = 'block';
         }
+        showToast('Please upload no more than 2 images.', 'error');
+        setBusyButtonState(submitButton, false, editingArticleId ? 'Updating…' : 'Saving…', editingArticleId ? 'Update Article' : 'Save Article');
         return;
       }
       let images = editingArticleId ? editingArticleImages : [];
@@ -1848,6 +2020,7 @@ function initAdminArticles() {
           message.className = 'fsuc show';
           message.style.display = 'block';
         }
+        showToast(editingArticleId ? 'Article updated successfully.' : 'Article saved successfully.', 'success');
         resetArticleForm();
         refreshArticles();
       } catch (err) {
@@ -1857,6 +2030,9 @@ function initAdminArticles() {
           message.className = 'ferr show';
           message.style.display = 'block';
         }
+        showToast(err.message || 'Failed to save article. Please try again.', 'error');
+      } finally {
+        setBusyButtonState(submitButton, false, editingArticleId ? 'Updating…' : 'Saving…', editingArticleId ? 'Update Article' : 'Save Article');
       }
     });
   }
@@ -1874,6 +2050,7 @@ function initAdminEvents() {
   const message = document.getElementById('eventMessage');
   const eventFormTitle = document.getElementById('eventFormTitle');
   const cancelEditButton = document.getElementById('cancelEventEdit');
+  const submitButton = form ? form.querySelector('button[type="submit"]') : null;
   const pagination = document.getElementById('eventPagination');
   const prevBtn = document.getElementById('eventPrevBtn');
   const nextBtn = document.getElementById('eventNextBtn');
@@ -1910,6 +2087,11 @@ function initAdminEvents() {
     updateEventPagination();
   };
 
+  const updateEventSubmitLabel = () => {
+    if (!submitButton) return;
+    submitButton.textContent = editingEventId ? 'Update Event' : 'Save Event';
+  };
+
   const resetEventForm = () => {
     editingEventId = null;
     form.eventTitle.value = '';
@@ -1923,6 +2105,7 @@ function initAdminEvents() {
     form.eventStatus.value = 'Scheduled';
     if (eventFormTitle) eventFormTitle.textContent = 'New Event';
     if (cancelEditButton) cancelEditButton.style.display = 'none';
+    updateEventSubmitLabel();
     if (message) {
       message.textContent = '';
       message.className = '';
@@ -1943,6 +2126,7 @@ function initAdminEvents() {
     form.eventStatus.value = data.status || 'Scheduled';
     if (eventFormTitle) eventFormTitle.textContent = 'Edit Event';
     if (cancelEditButton) cancelEditButton.style.display = 'inline-flex';
+    updateEventSubmitLabel();
   };
 
   const renderEvent = (id, data) => {
@@ -1971,12 +2155,14 @@ function initAdminEvents() {
     `;
     const buttons = card.querySelectorAll('button');
     buttons[0].addEventListener('click', () => setEventForm(id, data));
-    buttons[1].addEventListener('click', () => deleteEventById(id));
+    buttons[1].addEventListener('click', () => deleteEventById(id, buttons[1]));
     return card;
   };
 
-  const deleteEventById = async (id) => {
+  const deleteEventById = async (id, button = null) => {
     if (!id || !confirm('Delete this event? This action cannot be undone.')) return;
+    setBusyButtonState(button, true, 'Deleting…', 'Delete');
+    showToast('Deleting event…', 'info', 2000);
     try {
       const res = await fetch(`${getApiBase()}/api/events/${encodeURIComponent(id)}`, { method: 'DELETE' });
       if (!res.ok) {
@@ -1988,6 +2174,7 @@ function initAdminEvents() {
         message.className = 'fsuc show';
         message.style.display = 'block';
       }
+      showToast('Event deleted successfully.', 'success');
       refreshEvents();
     } catch (err) {
       console.error('Delete event failed', err);
@@ -1996,6 +2183,9 @@ function initAdminEvents() {
         message.className = 'ferr show';
         message.style.display = 'block';
       }
+      showToast(err.message || 'Failed to delete event.', 'error');
+    } finally {
+      setBusyButtonState(button, false, 'Deleting…', 'Delete');
     }
   };
 
@@ -2051,12 +2241,16 @@ function initAdminEvents() {
       const featured = form.eventFeatured.checked;
       const description = form.eventDescription.value.trim();
       const status = form.eventStatus.value;
+      setBusyButtonState(submitButton, true, editingEventId ? 'Updating…' : 'Saving…', editingEventId ? 'Update Event' : 'Save Event');
+      showToast(editingEventId ? 'Updating event…' : 'Saving event…', 'info', 2000);
       if (!title || !eventDate) {
         if (message) {
           message.textContent = 'Event name and date are required.';
           message.className = 'ferr show';
           message.style.display = 'block';
         }
+        showToast('Event name and date are required.', 'error');
+        setBusyButtonState(submitButton, false, editingEventId ? 'Updating…' : 'Saving…', editingEventId ? 'Update Event' : 'Save Event');
         return;
       }
       try {
@@ -2086,6 +2280,7 @@ function initAdminEvents() {
           message.className = 'fsuc show';
           message.style.display = 'block';
         }
+        showToast(editingEventId ? 'Event updated successfully.' : 'Event saved successfully.', 'success');
         resetEventForm();
         refreshEvents();
       } catch (err) {
@@ -2095,6 +2290,9 @@ function initAdminEvents() {
           message.className = 'ferr show';
           message.style.display = 'block';
         }
+        showToast(err.message || 'Failed to save event. Please try again.', 'error');
+      } finally {
+        setBusyButtonState(submitButton, false, editingEventId ? 'Updating…' : 'Saving…', editingEventId ? 'Update Event' : 'Save Event');
       }
     });
   }
@@ -2117,6 +2315,7 @@ function initAdminGallery() {
   const pageLabel = document.getElementById('galleryPageLabel');
   const galleryFormTitle = document.getElementById('galleryFormTitle');
   const cancelEditButton = document.getElementById('cancelGalleryEdit');
+  const submitButton = form ? form.querySelector('button[type="submit"]') : null;
 
   let editingGalleryId = null;
   let editingGalleryImage = '';
@@ -2167,6 +2366,11 @@ function initAdminGallery() {
     imagePreview.appendChild(wrapper);
   };
 
+  const updateGallerySubmitLabel = () => {
+    if (!submitButton) return;
+    submitButton.textContent = editingGalleryId ? 'Update Gallery Item' : 'Save Gallery Item';
+  };
+
   const resetGalleryForm = () => {
     editingGalleryId = null;
     editingGalleryImage = '';
@@ -2178,6 +2382,7 @@ function initAdminGallery() {
     if (form.galleryImage) form.galleryImage.value = '';
     if (galleryFormTitle) galleryFormTitle.textContent = 'New Gallery Item';
     if (cancelEditButton) cancelEditButton.style.display = 'none';
+    updateGallerySubmitLabel();
     if (message) {
       message.textContent = '';
       message.className = '';
@@ -2196,6 +2401,7 @@ function initAdminGallery() {
     form.galleryStatus.value = data.status || 'Draft';
     if (galleryFormTitle) galleryFormTitle.textContent = 'Edit Gallery Item';
     if (cancelEditButton) cancelEditButton.style.display = 'inline-flex';
+    updateGallerySubmitLabel();
     renderPreview(editingGalleryImage);
   };
 
@@ -2224,12 +2430,14 @@ function initAdminGallery() {
     `;
     const buttons = card.querySelectorAll('button');
     buttons[0].addEventListener('click', () => setGalleryForm(id, data));
-    buttons[1].addEventListener('click', () => deleteGalleryById(id));
+    buttons[1].addEventListener('click', () => deleteGalleryById(id, buttons[1]));
     return card;
   };
 
-  const deleteGalleryById = async (id) => {
+  const deleteGalleryById = async (id, button = null) => {
     if (!id || !confirm('Delete this gallery item? This action cannot be undone.')) return;
+    setBusyButtonState(button, true, 'Deleting…', 'Delete');
+    showToast('Deleting gallery item…', 'info', 2000);
     try {
       const res = await fetch(`${getApiBase()}/api/gallery/${encodeURIComponent(id)}`, { method: 'DELETE' });
       if (!res.ok) {
@@ -2241,6 +2449,7 @@ function initAdminGallery() {
         message.className = 'fsuc show';
         message.style.display = 'block';
       }
+      showToast('Gallery item deleted successfully.', 'success');
       refreshGalleryItems();
     } catch (err) {
       console.error('Delete gallery item failed', err);
@@ -2249,6 +2458,9 @@ function initAdminGallery() {
         message.className = 'ferr show';
         message.style.display = 'block';
       }
+      showToast(err.message || 'Failed to delete gallery item.', 'error');
+    } finally {
+      setBusyButtonState(button, false, 'Deleting…', 'Delete');
     }
   };
 
@@ -2300,12 +2512,16 @@ function initAdminGallery() {
       const description = form.galleryDescription.value.trim();
       const status = form.galleryStatus.value;
       const imageFile = form.galleryImage?.files ? form.galleryImage.files[0] : null;
+      setBusyButtonState(submitButton, true, editingGalleryId ? 'Updating…' : 'Saving…', editingGalleryId ? 'Update Gallery Item' : 'Save Gallery Item');
+      showToast(editingGalleryId ? 'Updating gallery item…' : 'Saving gallery item…', 'info', 2000);
       if (!title) {
         if (message) {
           message.textContent = 'Title is required.';
           message.className = 'ferr show';
           message.style.display = 'block';
         }
+        showToast('Title is required.', 'error');
+        setBusyButtonState(submitButton, false, editingGalleryId ? 'Updating…' : 'Saving…', editingGalleryId ? 'Update Gallery Item' : 'Save Gallery Item');
         return;
       }
       if (!editingGalleryId && !imageFile) {
@@ -2314,6 +2530,8 @@ function initAdminGallery() {
           message.className = 'ferr show';
           message.style.display = 'block';
         }
+        showToast('Please upload an image for the gallery item.', 'error');
+        setBusyButtonState(submitButton, false, editingGalleryId ? 'Updating…' : 'Saving…', editingGalleryId ? 'Update Gallery Item' : 'Save Gallery Item');
         return;
       }
       let image = editingGalleryImage;
@@ -2327,6 +2545,8 @@ function initAdminGallery() {
             message.className = 'ferr show';
             message.style.display = 'block';
           }
+          showToast('Image upload failed. Please try again.', 'error');
+          setBusyButtonState(submitButton, false, editingGalleryId ? 'Updating…' : 'Saving…', editingGalleryId ? 'Update Gallery Item' : 'Save Gallery Item');
           return;
         }
       }
@@ -2348,6 +2568,7 @@ function initAdminGallery() {
           message.className = 'fsuc show';
           message.style.display = 'block';
         }
+        showToast(editingGalleryId ? 'Gallery item updated successfully.' : 'Gallery item saved successfully.', 'success');
         resetGalleryForm();
         refreshGalleryItems();
       } catch (err) {
@@ -2357,6 +2578,9 @@ function initAdminGallery() {
           message.className = 'ferr show';
           message.style.display = 'block';
         }
+        showToast(err.message || 'Failed to save gallery item. Please try again.', 'error');
+      } finally {
+        setBusyButtonState(submitButton, false, editingGalleryId ? 'Updating…' : 'Saving…', editingGalleryId ? 'Update Gallery Item' : 'Save Gallery Item');
       }
     });
   }

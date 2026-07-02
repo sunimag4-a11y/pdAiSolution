@@ -48,7 +48,7 @@
       <button class="btn btn-ghost btn-sm gf-btn" data-filter="product">Product</button>
     </div>
 
-    <div class="gal-grid">
+    <div class="gal-grid" id="galleryGrid">
 
       <div class="gal-item reveal d1" data-cat="events">
         <img src="https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=600&q=80" alt="AI Summit 2025 keynote stage" loading="lazy">
@@ -110,6 +110,11 @@
         <div class="gal-ov"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35M11 8v6M8 11h6"/></svg></div>
       </div>
 
+    </div>
+    <div class="pagination-bar" id="galleryPagination" style="display:none">
+      <button class="btn btn-ghost btn-sm pagination-btn" id="galleryPrevBtn" type="button">Previous</button>
+      <span class="pagination-info" id="galleryPageLabel">Page 1</span>
+      <button class="btn btn-ghost btn-sm pagination-btn" id="galleryNextBtn" type="button">Next</button>
     </div>
   </div>
 </section>

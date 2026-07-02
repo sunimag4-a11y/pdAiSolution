@@ -44,7 +44,12 @@
       <h2>Upcoming Events</h2>
     </div>
 
-    <div id="upcomingEvents" class="events-list" style="display:flex;flex-direction:column;gap:1.1rem;margin-bottom:3.5rem"></div>
+    <div id="upcomingEvents" class="events-list" style="display:flex;flex-direction:column;gap:1.1rem;margin-bottom:1.25rem"></div>
+    <div class="pagination-bar" id="upcomingPagination" style="display:none;margin-bottom:3.5rem">
+      <button class="btn btn-ghost btn-sm pagination-btn" id="upcomingPrevBtn" type="button">Previous</button>
+      <span class="pagination-info" id="upcomingPageLabel">Page 1</span>
+      <button class="btn btn-ghost btn-sm pagination-btn" id="upcomingNextBtn" type="button">Next</button>
+    </div>
 
     <!-- Past Events -->
     <div class="sec-head" style="text-align:left;margin-bottom:2rem">
